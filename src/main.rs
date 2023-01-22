@@ -1,7 +1,11 @@
 use clap::Parser;
 use colored::Colorize;
 use log::{error, info, warn};
-use std::{fs, io::Write, path::Path};
+use std::{
+    fs,
+    io::{self, Write},
+    path::Path,
+};
 use swing::Logger;
 use url::Url;
 
@@ -95,16 +99,16 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, download: bool) {
                 return;
             }
             info!("Writing to file: {}", path);
-            fs::File::create(path)
-                .unwrap_or_else(|e| {
-                    error!("Cannot create file: {}: {}", path, e);
-                    panic!();
-                })
-                .write_all(response.as_bytes())
-                .unwrap_or_else(|e| {
-                    error!("Cannot write to file: {}: {}", path, e);
-                    panic!();
-                });
+            let mut f = fs::File::create(path).unwrap_or_else(|e| {
+                error!("Cannot create file: {}: {}", path, e);
+                panic!();
+            });
+
+            io::copy(
+                &mut reqwest::blocking::get(url.to_string()).unwrap(),
+                &mut f,
+            )
+            .unwrap();
         }
     }
 
@@ -172,7 +176,7 @@ fn main() {
     let args = Args::parse();
     info!("Url: {}", &args.url);
 
-    let mut found_urls: Vec<Url> = vec![Url::parse(&args.url).unwrap()];
+    let mut found_urls: Vec<Url> = vec![];
     info!("Parsing url...");
     let document = Url::parse(&args.url).unwrap_or_else(|_| {
         error!("Cannot parse url: {}", args.url);
