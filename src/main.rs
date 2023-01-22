@@ -3,7 +3,7 @@ use colored::Colorize;
 use log::{error, info, warn};
 use std::{
     fs,
-    io::{self, Write},
+    io::{self},
     path::Path,
 };
 use swing::Logger;
@@ -17,16 +17,24 @@ struct Args {
     #[arg(short, long)]
     url: String,
 
-    /// Download the tree
+    /// Download all files
     #[arg(short, long)]
     download: bool,
+
+    /// Whether or not to crawl other websites it finds a link to. Might result in downloading the entire internet
+    #[arg(short, long)]
+    crawl_external: bool,
+
+    /// Maximum url length it allows. Will ignore page it url length reaches this limit
+    #[arg(short, long, default_value_t = 300)]
+    max_url_length: u32,
 }
 
-fn crawl(url: &Url, urls: &mut Vec<Url>, download: bool) {
+fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
     if !urls.iter().any(|x| x.as_str() == url.as_str()) {
         urls.push(url.clone());
     }
-    if url.to_string().len() > 300 {
+    if url.to_string().len() > args.max_url_length as usize {
         return;
     }
 
@@ -55,7 +63,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, download: bool) {
         == "text/html";
     let response = response.unwrap().text().unwrap();
 
-    if download {
+    if args.download {
         info!("Downloading file...");
         let mut location = std::env::current_dir().unwrap();
         location.push(url.domain().unwrap());
@@ -161,9 +169,9 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, download: bool) {
     for i in &found {
         if !urls.iter().any(|x| x.as_str() == i.as_str()) {
             urls.push(i.clone());
-            if url.domain() == i.domain() {
+            if url.domain() == i.domain() || args.crawl_external {
                 info!("Url is internal. Crawling: {}", i.to_string());
-                crawl(i, urls, download);
+                crawl(i, urls, args);
             }
         }
     }
@@ -184,7 +192,7 @@ fn main() {
     });
 
     info!("Crawling...");
-    crawl(&document, &mut found_urls, args.download);
+    crawl(&document, &mut found_urls, &args);
 
     let mut internal_urls = Vec::new();
     let mut external_urls = Vec::new();
