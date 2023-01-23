@@ -67,60 +67,62 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
         == "text/html";
     let response = response.unwrap().text().unwrap();
 
-    if args.download {
-        info!("Downloading file...");
-        let mut location = std::env::current_dir().unwrap();
-        location.push(url.domain().unwrap());
-        {
-            let mut path = url.path().strip_prefix("/").unwrap_or(url.path());
-            path = path.strip_suffix("/").unwrap_or(path);
-            path = path.strip_suffix("\\").unwrap_or(path);
-            info!("Working directory: {}", location.to_str().unwrap());
-            location.push(path);
-        }
-
-        if is_html && !location.ends_with(".html") {
-            location.push("index.html");
-        }
-        info!("Location before: {}", location.to_str().unwrap());
-        let mut location_without_last_dir = location.clone();
-        assert!(location_without_last_dir.pop());
-        info!(
-            "Creating directories: {}",
-            location_without_last_dir.to_str().unwrap()
-        );
-        match fs::create_dir_all(&location_without_last_dir) {
-            Err(e) => {
-                warn!(
-                    "Cannot create directory: {}: {}",
-                    &location_without_last_dir.to_str().unwrap(),
-                    e
-                );
-                return;
+    'download: {
+        if args.download {
+            info!("Downloading file...");
+            let mut location = std::env::current_dir().unwrap();
+            location.push(url.domain().unwrap());
+            {
+                let mut path = url.path().strip_prefix("/").unwrap_or(url.path());
+                path = path.strip_suffix("/").unwrap_or(path);
+                path = path.strip_suffix("\\").unwrap_or(path);
+                info!("Working directory: {}", location.to_str().unwrap());
+                location.push(path);
             }
-            _ => {}
-        };
 
-        {
-            let mut path = location.to_str().unwrap();
-            path = path.strip_suffix("/").unwrap_or(path);
-            path = path.strip_suffix("\\").unwrap_or(path);
-
-            if Path::new(path).exists() {
-                warn!("File already exists: {}", path);
-                return;
+            if is_html && !location.ends_with(".html") {
+                location.push("index.html");
             }
-            info!("Writing to file: {}", path);
-            let mut f = fs::File::create(path).unwrap_or_else(|e| {
-                error!("Cannot create file: {}: {}", path, e);
-                panic!();
-            });
+            info!("Location before: {}", location.to_str().unwrap());
+            let mut location_without_last_dir = location.clone();
+            assert!(location_without_last_dir.pop());
+            info!(
+                "Creating directories: {}",
+                location_without_last_dir.to_str().unwrap()
+            );
+            match fs::create_dir_all(&location_without_last_dir) {
+                Err(e) => {
+                    warn!(
+                        "Cannot create directory: {}: {}",
+                        &location_without_last_dir.to_str().unwrap(),
+                        e
+                    );
+                    break 'download;
+                }
+                _ => {}
+            };
 
-            io::copy(
-                &mut reqwest::blocking::get(url.to_string()).unwrap(),
-                &mut f,
-            )
-            .unwrap();
+            {
+                let mut path = location.to_str().unwrap();
+                path = path.strip_suffix("/").unwrap_or(path);
+                path = path.strip_suffix("\\").unwrap_or(path);
+
+                if Path::new(path).exists() {
+                    warn!("File already exists: {}", path);
+                    break 'download;
+                }
+                info!("Writing to file: {}", path);
+                let mut f = fs::File::create(path).unwrap_or_else(|e| {
+                    error!("Cannot create file: {}: {}", path, e);
+                    panic!();
+                });
+
+                io::copy(
+                    &mut reqwest::blocking::get(url.to_string()).unwrap(),
+                    &mut f,
+                )
+                .unwrap();
+            }
         }
     }
 
