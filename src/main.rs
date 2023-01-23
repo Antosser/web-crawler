@@ -172,6 +172,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
 
     for mut i in found {
         i = Url::parse(i.to_string().split('?').nth(0).unwrap_or(&i.to_string())).unwrap();
+        i = Url::parse(i.to_string().split('#').nth(0).unwrap_or(&i.to_string())).unwrap();
 
         if !urls.iter().any(|x| x.as_str() == i.as_str()) {
             if !args.exclude.iter().any(|j| i.path().starts_with(j)) {
