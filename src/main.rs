@@ -13,8 +13,8 @@ use url::Url;
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Url of the website you want to crawl
-    #[arg(short, long)]
+    // /// Url of the website you want to crawl
+    // #[arg(short, long)]
     url: String,
 
     /// Download all files
@@ -28,6 +28,10 @@ struct Args {
     /// Maximum url length it allows. Will ignore page it url length reaches this limit
     #[arg(short, long, default_value_t = 300)]
     max_url_length: u32,
+
+    /// Will ignore paths that start with these strings
+    #[arg(short, long, use_value_delimiter = true, value_delimiter = ',')]
+    exclude: Vec<String>,
 }
 
 fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
@@ -166,12 +170,16 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
         found.push(url);
     }
 
-    for i in &found {
+    for mut i in found {
+        i = Url::parse(i.to_string().split('?').nth(0).unwrap_or(&i.to_string())).unwrap();
+
         if !urls.iter().any(|x| x.as_str() == i.as_str()) {
-            urls.push(i.clone());
-            if url.domain() == i.domain() || args.crawl_external {
-                info!("Url is internal. Crawling: {}", i.to_string());
-                crawl(i, urls, args);
+            if !args.exclude.iter().any(|j| i.path().starts_with(j)) {
+                urls.push(i.clone());
+                if url.domain() == i.domain() || args.crawl_external {
+                    info!("Url is internal. Crawling: {}", i.to_string());
+                    crawl(&i, urls, args);
+                }
             }
         }
     }
@@ -182,7 +190,7 @@ fn main() {
 
     info!("Parsing arguments...");
     let args = Args::parse();
-    info!("Url: {}", &args.url);
+    info!("{:?}", args);
 
     let mut found_urls: Vec<Url> = vec![];
     info!("Parsing url...");
