@@ -29,7 +29,7 @@ struct Args {
     #[arg(short, long, default_value_t = 300)]
     max_url_length: u32,
 
-    /// Will ignore paths that start with these strings
+    /// Will ignore paths that start with these strings (comma-seperated)
     #[arg(short, long, use_value_delimiter = true, value_delimiter = ',')]
     exclude: Vec<String>,
 }
