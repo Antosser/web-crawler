@@ -1,12 +1,11 @@
 use clap::Parser;
 use colored::Colorize;
-use log::{error, info, warn};
+use log::{debug, error, info, trace, warn};
 use std::{
     fs,
     io::{self},
     path::Path,
 };
-use swing::Logger;
 use url::Url;
 
 /// Rust Web Crawler
@@ -42,7 +41,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
         return;
     }
 
-    info!("Fetching url: {}", url.to_string());
+    trace!("Fetching url: {}", url.to_string());
     let response = reqwest::blocking::get(url.as_str());
     if response.is_err() {
         warn!("Request failed: {}", url.to_string());
@@ -76,14 +75,14 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                 let mut path = url.path().strip_prefix("/").unwrap_or(url.path());
                 path = path.strip_suffix("/").unwrap_or(path);
                 path = path.strip_suffix("\\").unwrap_or(path);
-                info!("Working directory: {}", location.to_str().unwrap());
+                trace!("Working directory: {}", location.to_str().unwrap());
                 location.push(path);
             }
 
             if is_html && !location.ends_with(".html") {
                 location.push("index.html");
             }
-            info!("Location before: {}", location.to_str().unwrap());
+            trace!("Location before: {}", location.to_str().unwrap());
             let mut location_without_last_dir = location.clone();
             assert!(location_without_last_dir.pop());
             info!(
@@ -111,7 +110,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                     warn!("File already exists: {}", path);
                     break 'download;
                 }
-                info!("Writing to file: {}", path);
+                trace!("Writing to file: {}", path);
                 let mut f = fs::File::create(path).unwrap_or_else(|e| {
                     error!("Cannot create file: {}: {}", path, e);
                     panic!();
@@ -131,7 +130,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
     if !is_html {
         return;
     }
-    info!("Parsing html...");
+    debug!("Parsing html...");
     let dom = tl::parse(&response, tl::ParserOptions::default());
     if dom.is_err() {
         warn!("Couldn't parse html.");
@@ -139,7 +138,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
     }
     let dom = dom.unwrap();
 
-    info!("Looping over all elements...");
+    trace!("Looping over all elements...");
     for element in dom.nodes().iter() {
         let tag = element.as_tag();
         if tag.is_none() {
@@ -159,14 +158,14 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
             continue;
         }
         let value = value.unwrap();
-        info!("Found link: {}", value.as_utf8_str().to_string());
+        trace!("Found link: {}", value.as_utf8_str().to_string());
 
         let url = url.join(&value.as_utf8_str().to_string());
         if url.is_err() {
             warn!("Invalid url: {}", value.as_utf8_str().to_string());
             continue;
         }
-        info!("Valid: {}", value.as_utf8_str().to_string());
+        trace!("Valid: {}", value.as_utf8_str().to_string());
         let url = url.unwrap();
 
         found.push(url);
@@ -178,9 +177,10 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
 
         if !urls.iter().any(|x| x.as_str() == i.as_str()) {
             if !args.exclude.iter().any(|j| i.path().starts_with(j)) {
+                info!("Found url: {}", i);
                 urls.push(i.clone());
                 if url.domain() == i.domain() || args.crawl_external {
-                    info!("Url is internal. Crawling: {}", i.to_string());
+                    trace!("Url is internal. Crawling: {}", i.to_string());
                     crawl(&i, urls, args);
                 }
             }
@@ -189,20 +189,20 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
 }
 
 fn main() {
-    Logger::new().init().unwrap();
+    env_logger::init();
 
-    info!("Parsing arguments...");
+    debug!("Parsing arguments...");
     let args = Args::parse();
-    info!("{:?}", args);
+    trace!("{:?}", args);
 
     let mut found_urls: Vec<Url> = vec![];
-    info!("Parsing url...");
+    trace!("Parsing url...");
     let document = Url::parse(&args.url).unwrap_or_else(|_| {
         error!("Cannot parse url: {}", args.url);
         panic!();
     });
 
-    info!("Crawling...");
+    debug!("Crawling...");
     crawl(&document, &mut found_urls, &args);
 
     let mut internal_urls = Vec::new();
