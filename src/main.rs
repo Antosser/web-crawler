@@ -50,26 +50,25 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
             exit(1);
         }
     };
-    let content_type = match response.headers().get("content-type") {
-        Some(x) => x,
+    let is_html = match response.headers().get("content-type") {
+        Some(content_type) => match content_type.to_str() {
+            Ok(content_type_string) => match content_type_string.split(";").nth(0) {
+                Some(x) => x.to_string() == "text/html",
+                None => {
+                    warn!("Cannot get content-type: {}", url);
+                    false
+                }
+            },
+            Err(_) => {
+                warn!("Cannot get content-type: {}", url);
+                false
+            }
+        },
         None => {
             warn!(
                 "Response header doesn't have content-type: {}",
                 url.to_string()
             );
-            return;
-        }
-    };
-    let is_html = match content_type.to_str() {
-        Ok(x) => match x.split(";").nth(0) {
-            Some(x) => x.to_string() == "text/html",
-            None => {
-                warn!("Cannot get content-type: {}", url);
-                false
-            }
-        },
-        Err(_) => {
-            warn!("Cannot get content-type: {}", url);
             false
         }
     };
@@ -198,12 +197,14 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
             }
         };
 
-        let value = match match tag.attributes().get("href") {
-            Some(x) => x,
-            None => match tag.attributes().get("src") {
+        let value = match {
+            match tag.attributes().get("href") {
                 Some(x) => x,
-                None => continue,
-            },
+                None => match tag.attributes().get("src") {
+                    Some(x) => x,
+                    None => continue,
+                },
+            }
         } {
             Some(x) => x,
             None => continue,
