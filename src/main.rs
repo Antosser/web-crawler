@@ -83,7 +83,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
 
     'download: {
         if args.download {
-            info!("Downloading file...");
+            trace!("Downloading file...");
             let mut path = match std::env::current_dir() {
                 Ok(x) => x,
                 Err(e) => {
@@ -115,6 +115,10 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                 trace!("Working directory: {}", path_string);
                 path.push(relative_path);
             }
+
+            if is_html && !path.ends_with(".html") {
+                path.push("index.html");
+            }
             let path2 = path.clone();
             let path_string = match path2.to_str() {
                 Some(x) => x,
@@ -123,10 +127,6 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                     return;
                 }
             };
-
-            if is_html && !path.ends_with(".html") {
-                path.push("index.html");
-            }
             trace!("Location before: {}", path_string);
             let mut path_without_last_dir = path.clone();
             assert!(path_without_last_dir.pop());
@@ -137,7 +137,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                     return;
                 }
             };
-            info!("Creating directories: {}", path_without_last_dir_string);
+            trace!("Creating directories: {}", path_without_last_dir_string);
             match fs::create_dir_all(&path_without_last_dir) {
                 Err(e) => {
                     warn!(
