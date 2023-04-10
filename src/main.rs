@@ -5,6 +5,7 @@ use std::{
     fs,
     io::{self},
     path::Path,
+    process::exit,
 };
 use url::Url;
 
@@ -42,59 +43,98 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
     }
 
     trace!("Fetching url: {}", url.to_string());
-    let response = reqwest::blocking::get(url.as_str());
-    if response.is_err() {
-        warn!("Request failed: {}", url.to_string());
-        return;
-    }
-    let content_type = response.as_ref().unwrap().headers().get("content-type");
-    if content_type.is_none() {
-        warn!(
-            "Response header doesn't have content-type: {}",
-            url.to_string()
-        );
-        return;
-    }
-    let is_html = content_type
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .split(";")
-        .nth(0)
-        .unwrap()
-        .to_string()
-        == "text/html";
-    let response = response.unwrap().text().unwrap();
+    let response = match reqwest::blocking::get(url.as_str()) {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Cannot request file: {}", e);
+            exit(1);
+        }
+    };
+    let content_type = match response.headers().get("content-type") {
+        Some(x) => x,
+        None => {
+            warn!(
+                "Response header doesn't have content-type: {}",
+                url.to_string()
+            );
+            return;
+        }
+    };
+    let is_html = match content_type.to_str() {
+        Ok(x) => match x.split(";").nth(0) {
+            Some(x) => x.to_string() == "text/html",
+            None => {
+                warn!("Cannot get content-type: {}", url);
+                false
+            }
+        },
+        Err(_) => {
+            warn!("Cannot get content-type: {}", url);
+            false
+        }
+    };
+    let response = match response.text() {
+        Ok(x) => x,
+        Err(e) => {
+            warn!("Cannot parse response as text: {}: {}", url, e);
+            return;
+        }
+    };
 
     'download: {
         if args.download {
             info!("Downloading file...");
-            let mut location = std::env::current_dir().unwrap();
-            location.push(url.domain().unwrap());
+            let mut path = match std::env::current_dir() {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Cannot get current working directory: {}", e);
+                    exit(1);
+                }
+            };
+            path.push(match url.domain() {
+                Some(x) => x,
+                None => {
+                    warn!("Cannot get domain of url: {}", url);
+                    return;
+                }
+            });
+
+            let path2 = path.clone();
+            let path_string = match path2.to_str() {
+                Some(x) => x,
+                None => {
+                    warn!("Couldn't stringify path");
+                    return;
+                }
+            };
+
             {
-                let mut path = url.path().strip_prefix("/").unwrap_or(url.path());
-                path = path.strip_suffix("/").unwrap_or(path);
-                path = path.strip_suffix("\\").unwrap_or(path);
-                trace!("Working directory: {}", location.to_str().unwrap());
-                location.push(path);
+                let mut relative_path = url.path().strip_prefix("/").unwrap_or(url.path());
+                relative_path = relative_path.strip_suffix("/").unwrap_or(relative_path);
+                relative_path = relative_path.strip_suffix("\\").unwrap_or(relative_path);
+                trace!("Working directory: {}", path_string);
+                path.push(relative_path);
             }
 
-            if is_html && !location.ends_with(".html") {
-                location.push("index.html");
+            if is_html && !path.ends_with(".html") {
+                path.push("index.html");
             }
-            trace!("Location before: {}", location.to_str().unwrap());
-            let mut location_without_last_dir = location.clone();
-            assert!(location_without_last_dir.pop());
-            info!(
-                "Creating directories: {}",
-                location_without_last_dir.to_str().unwrap()
-            );
-            match fs::create_dir_all(&location_without_last_dir) {
+            trace!("Location before: {}", path_string);
+            let mut path_without_last_dir = path.clone();
+            assert!(path_without_last_dir.pop());
+            let path_without_last_dir_string = match path_without_last_dir.to_str() {
+                Some(x) => x,
+                None => {
+                    warn!("Couldn't stringify path");
+                    return;
+                }
+            };
+            info!("Creating directories: {}", path_without_last_dir_string);
+            match fs::create_dir_all(&path_without_last_dir) {
                 Err(e) => {
                     warn!(
                         "Cannot create directory: {}: {}",
-                        &location_without_last_dir.to_str().unwrap(),
-                        e
+                        path_without_last_dir_string, e
                     );
                     break 'download;
                 }
@@ -102,7 +142,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
             };
 
             {
-                let mut path = location.to_str().unwrap();
+                let mut path = path_string;
                 path = path.strip_suffix("/").unwrap_or(path);
                 path = path.strip_suffix("\\").unwrap_or(path);
 
@@ -113,14 +153,16 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                 trace!("Writing to file: {}", path);
                 let mut f = fs::File::create(path).unwrap_or_else(|e| {
                     error!("Cannot create file: {}: {}", path, e);
-                    panic!();
+                    exit(1);
                 });
 
-                io::copy(
-                    &mut reqwest::blocking::get(url.to_string()).unwrap(),
-                    &mut f,
-                )
-                .unwrap();
+                match io::copy(&mut response.as_bytes(), &mut f) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("Cannot create file: {}: {}", path, e);
+                        exit(1);
+                    }
+                };
             }
         }
     }
@@ -131,49 +173,50 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
         return;
     }
     debug!("Parsing html...");
-    let dom = tl::parse(&response, tl::ParserOptions::default());
-    if dom.is_err() {
-        warn!("Couldn't parse html.");
-        return;
-    }
-    let dom = dom.unwrap();
+    let dom = match tl::parse(&response, tl::ParserOptions::default()) {
+        Ok(x) => x,
+        Err(e) => {
+            warn!("Cannot parse html: {}: {}", url, e);
+            return;
+        }
+    };
 
     trace!("Looping over all elements...");
     for element in dom.nodes().iter() {
-        let tag = element.as_tag();
-        if tag.is_none() {
-            continue;
-        }
-        let tag = tag.unwrap();
-
-        let mut value = tag.attributes().get("href");
-        if value.is_none() {
-            value = tag.attributes().get("src");
-            if value.is_none() {
+        let tag = match element.as_tag() {
+            Some(x) => x,
+            None => {
                 continue;
             }
-        }
-        let value = value.unwrap();
-        if value.is_none() {
-            continue;
-        }
-        let value = value.unwrap();
+        };
+
+        let value = match match tag.attributes().get("href") {
+            Some(x) => x,
+            None => match tag.attributes().get("src") {
+                Some(x) => x,
+                None => continue,
+            },
+        } {
+            Some(x) => x,
+            None => continue,
+        };
         trace!("Found link: {}", value.as_utf8_str().to_string());
 
-        let url = url.join(&value.as_utf8_str().to_string());
-        if url.is_err() {
-            warn!("Invalid url: {}", value.as_utf8_str().to_string());
-            continue;
-        }
+        let url = match url.join(&value.as_utf8_str().to_string()) {
+            Ok(x) => x,
+            Err(e) => {
+                warn!("Cannot join url: {}", e);
+                continue;
+            }
+        };
         trace!("Valid: {}", value.as_utf8_str().to_string());
-        let url = url.unwrap();
 
         found.push(url);
     }
 
     for mut i in found {
-        i = Url::parse(i.to_string().split('?').nth(0).unwrap_or(&i.to_string())).unwrap();
-        i = Url::parse(i.to_string().split('#').nth(0).unwrap_or(&i.to_string())).unwrap();
+        i = Url::parse(i.to_string().split('?').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
+        i = Url::parse(i.to_string().split('#').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
 
         if !urls.iter().any(|x| x.as_str() == i.as_str()) {
             if !args.exclude.iter().any(|j| i.path().starts_with(j)) {
@@ -199,7 +242,7 @@ fn main() {
     trace!("Parsing url...");
     let document = Url::parse(&args.url).unwrap_or_else(|_| {
         error!("Cannot parse url: {}", args.url);
-        panic!();
+        exit(1);
     });
 
     debug!("Crawling...");
