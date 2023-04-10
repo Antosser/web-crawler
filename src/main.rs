@@ -115,6 +115,14 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                 trace!("Working directory: {}", path_string);
                 path.push(relative_path);
             }
+            let path2 = path.clone();
+            let path_string = match path2.to_str() {
+                Some(x) => x,
+                None => {
+                    warn!("Couldn't stringify path");
+                    return;
+                }
+            };
 
             if is_html && !path.ends_with(".html") {
                 path.push("index.html");
@@ -142,24 +150,24 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
             };
 
             {
-                let mut path = path_string;
-                path = path.strip_suffix("/").unwrap_or(path);
-                path = path.strip_suffix("\\").unwrap_or(path);
+                let mut file_path = path_string;
+                file_path = file_path.strip_suffix("/").unwrap_or(file_path);
+                file_path = file_path.strip_suffix("\\").unwrap_or(file_path);
 
-                if Path::new(path).exists() {
-                    warn!("File already exists: {}", path);
+                if Path::new(file_path).exists() {
+                    warn!("File already exists: {}", file_path);
                     break 'download;
                 }
-                trace!("Writing to file: {}", path);
-                let mut f = fs::File::create(path).unwrap_or_else(|e| {
-                    error!("Cannot create file: {}: {}", path, e);
+                trace!("Writing to file: {}", file_path);
+                let mut f = fs::File::create(file_path).unwrap_or_else(|e| {
+                    error!("Cannot create file: {}: {}", file_path, e);
                     exit(1);
                 });
 
                 match io::copy(&mut response.as_bytes(), &mut f) {
                     Ok(_) => {}
                     Err(e) => {
-                        error!("Cannot create file: {}: {}", path, e);
+                        error!("Cannot create file: {}: {}", file_path, e);
                         exit(1);
                     }
                 };
