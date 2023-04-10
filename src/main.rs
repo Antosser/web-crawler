@@ -166,7 +166,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                 match io::copy(&mut response.as_bytes(), &mut f) {
                     Ok(_) => {}
                     Err(e) => {
-                        error!("Cannot create file: {}: {}", file_path, e);
+                        error!("Cannot write to file: {}: {}", file_path, e);
                         exit(1);
                     }
                 };
