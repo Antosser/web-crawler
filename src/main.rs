@@ -1,12 +1,7 @@
 use clap::Parser;
 use colored::Colorize;
 use log::{debug, error, info, trace, warn};
-use std::{
-    fs,
-    io::{self},
-    path::Path,
-    process::exit,
-};
+use std::{fs, io::Write, path::Path, process::exit};
 use url::Url;
 
 /// Rust Web Crawler
@@ -72,7 +67,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
             false
         }
     };
-    let response = match response.text() {
+    let response_bytes = match response.bytes() {
         Ok(x) => x,
         Err(e) => {
             warn!("Cannot parse response as text: {}: {}", url, e);
@@ -163,7 +158,7 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
                     exit(1);
                 });
 
-                match io::copy(&mut response.as_bytes(), &mut f) {
+                match f.write_all(&response_bytes) {
                     Ok(_) => {}
                     Err(e) => {
                         error!("Cannot write to file: {}: {}", file_path, e);
@@ -179,8 +174,9 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
     if !is_html {
         return;
     }
+    let response_text = String::from_utf8_lossy(&response_bytes);
     debug!("Parsing html...");
-    let dom = match tl::parse(&response, tl::ParserOptions::default()) {
+    let dom = match tl::parse(&response_text, tl::ParserOptions::default()) {
         Ok(x) => x,
         Err(e) => {
             warn!("Cannot parse html: {}: {}", url, e);
