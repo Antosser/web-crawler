@@ -2,6 +2,7 @@ use clap::Parser;
 use colored::Colorize;
 use log::{debug, error, info, trace, warn};
 use std::{
+    borrow::Borrow,
     fs,
     io::Write,
     path::Path,
@@ -12,7 +13,7 @@ use std::{
 use url::Url;
 
 /// Rust Web Crawler
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     // /// Url of the website you want to crawl
@@ -34,6 +35,18 @@ struct Args {
     /// Will ignore paths that start with these strings (comma-seperated)
     #[arg(short, long, use_value_delimiter = true, value_delimiter = ',')]
     exclude: Vec<String>,
+
+    /// Where to export found URLs
+    #[arg(long)]
+    export: Option<String>,
+
+    /// Where to export internal URLs
+    #[arg(long)]
+    export_internal: Option<String>,
+
+    /// Where to export external URLs
+    #[arg(long)]
+    export_external: Option<String>,
 }
 
 fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
@@ -279,7 +292,7 @@ fn main() {
     });
 
     debug!("Crawling...");
-    crawl(&document, found_urls.clone(), Arc::new(args));
+    crawl(&document, found_urls.clone(), Arc::new(args.clone()));
 
     let mut found_urls = found_urls.lock().unwrap();
     found_urls.sort();
@@ -295,13 +308,47 @@ fn main() {
         }
     }
 
-    println!("{}", format!("Internal urls:").red());
-    for url in internal_urls {
+    println!("{}", format!("Internal urls:").bright_green());
+    for url in &internal_urls {
         println!("{}", url.as_str());
     }
 
     println!("{}", format!("External urls:").red());
-    for url in external_urls {
+    for url in &external_urls {
         println!("{}", url.as_str());
+    }
+
+    fn export<T: Borrow<Url>>(file_name: &str, found_urls: &[T]) {
+        'export: {
+            let mut file = match fs::File::create(&file_name) {
+                Ok(x) => x,
+                Err(e) => {
+                    error!("Cannot create file: {}: {}", file_name, e);
+                    break 'export;
+                }
+            };
+
+            for url in found_urls.iter() {
+                match file.write_all(format!("{}\n", url.borrow().as_str()).as_bytes()) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("Cannot write to file: {}: {}", file_name, e);
+                        break 'export;
+                    }
+                }
+            }
+        }
+
+        info!("Exported to file: {}", file_name);
+    }
+
+    if let Some(file_name) = args.export {
+        export(&file_name, &found_urls);
+    }
+    if let Some(file_name) = args.export_internal {
+        export(&file_name, &internal_urls);
+    }
+    if let Some(file_name) = args.export_external {
+        export(&file_name, &external_urls);
     }
 }
