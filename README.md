@@ -5,7 +5,7 @@ Finds every page, image, and script on a website (and downloads it)
 ```
 Rust Web Crawler
 
-Usage: web-crawler [OPTIONS] <URL>
+Usage: web-crawler.exe [OPTIONS] <URL>
 
 Arguments:
   <URL>
@@ -19,6 +19,12 @@ Options:
           Maximum url length it allows. Will ignore page it url length reaches this limit [default: 300]
   -e, --exclude <EXCLUDE>
           Will ignore paths that start with these strings (comma-seperated)
+      --export <EXPORT>
+          Where to export found URLs
+      --export-internal <EXPORT_INTERNAL>
+          Where to export internal URLs
+      --export-external <EXPORT_EXTERNAL>
+          Where to export external URLs
   -h, --help
           Print help
   -V, --version
