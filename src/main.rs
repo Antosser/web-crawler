@@ -156,17 +156,13 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
                 }
             };
             trace!("Creating directories: {}", path_without_last_dir_string);
-            match fs::create_dir_all(&path_without_last_dir) {
-                Err(e) => {
-                    warn!(
-                        "Cannot create directory: {}: {}",
-                        path_without_last_dir_string, e
-                    );
-                    break 'download;
-                }
-                _ => {}
-            };
-
+            if let Err(e) = fs::create_dir_all(&path_without_last_dir) {
+                warn!(
+                    "Cannot create directory: {}: {}",
+                    path_without_last_dir_string, e
+                );
+                break 'download;
+            }
             {
                 let mut file_path = path_string;
                 file_path = file_path.strip_suffix('/').unwrap_or(file_path);
@@ -252,7 +248,9 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
             i = Url::parse(i.to_string().split('?').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
             i = Url::parse(i.to_string().split('#').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
 
-            if !urls_locked.iter().any(|x| x.as_str() == i.as_str()) && !args.exclude.iter().any(|j| i.path().starts_with(j)) {
+            if !urls_locked.iter().any(|x| x.as_str() == i.as_str())
+                && !args.exclude.iter().any(|j| i.path().starts_with(j))
+            {
                 info!("Found url: {}", i);
                 urls_locked.push(i.clone());
                 if url.domain() == i.domain() || args.crawl_external {
