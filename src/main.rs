@@ -281,7 +281,8 @@ fn main() {
     debug!("Crawling...");
     crawl(&document, found_urls.clone(), Arc::new(args));
 
-    let found_urls = found_urls.lock().unwrap();
+    let mut found_urls = found_urls.lock().unwrap();
+    found_urls.sort();
 
     let mut internal_urls = Vec::new();
     let mut external_urls = Vec::new();
