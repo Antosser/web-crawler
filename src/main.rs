@@ -1,7 +1,14 @@
 use clap::Parser;
 use colored::Colorize;
 use log::{debug, error, info, trace, warn};
-use std::{fs, io::Write, path::Path, process::exit};
+use std::{
+    fs,
+    io::Write,
+    path::Path,
+    process::exit,
+    sync::{Arc, Mutex},
+    thread,
+};
 use url::Url;
 
 /// Rust Web Crawler
@@ -29,12 +36,16 @@ struct Args {
     exclude: Vec<String>,
 }
 
-fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
-    if !urls.iter().any(|x| x.as_str() == url.as_str()) {
-        urls.push(url.clone());
-    }
-    if url.to_string().len() > args.max_url_length as usize {
-        return;
+fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
+    {
+        let mut urls = urls.lock().unwrap();
+
+        if !urls.iter().any(|x| x.as_str() == url.as_str()) {
+            urls.push(url.clone());
+        }
+        if url.to_string().len() > args.max_url_length as usize {
+            return;
+        }
     }
 
     trace!("Fetching url: {}", url.to_string());
@@ -219,20 +230,37 @@ fn crawl(url: &Url, urls: &mut Vec<Url>, args: &Args) {
         found.push(url);
     }
 
-    for mut i in found {
-        i = Url::parse(i.to_string().split('?').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
-        i = Url::parse(i.to_string().split('#').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
+    let mut threads = vec![];
 
-        if !urls.iter().any(|x| x.as_str() == i.as_str()) {
-            if !args.exclude.iter().any(|j| i.path().starts_with(j)) {
-                info!("Found url: {}", i);
-                urls.push(i.clone());
-                if url.domain() == i.domain() || args.crawl_external {
-                    trace!("Url is internal. Crawling: {}", i.to_string());
-                    crawl(&i, urls, args);
+    {
+        let mut urls_locked = urls.lock().unwrap();
+
+        for mut i in found {
+            i = Url::parse(i.to_string().split('?').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
+            i = Url::parse(i.to_string().split('#').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
+
+            if !urls_locked.iter().any(|x| x.as_str() == i.as_str()) {
+                if !args.exclude.iter().any(|j| i.path().starts_with(j)) {
+                    info!("Found url: {}", i);
+                    urls_locked.push(i.clone());
+                    if url.domain() == i.domain() || args.crawl_external {
+                        trace!("Url is internal. Crawling: {}", i.to_string());
+                        {
+                            let urls = urls.clone();
+                            let args = args.clone();
+
+                            threads.push(thread::spawn(move || {
+                                crawl(&i, urls, args);
+                            }));
+                        }
+                    }
                 }
             }
         }
+    }
+
+    for thread in threads {
+        thread.join().unwrap();
     }
 }
 
@@ -243,7 +271,7 @@ fn main() {
     let args = Args::parse();
     trace!("{:?}", args);
 
-    let mut found_urls: Vec<Url> = vec![];
+    let found_urls: Arc<Mutex<Vec<Url>>> = Arc::new(Mutex::new(vec![]));
     trace!("Parsing url...");
     let document = Url::parse(&args.url).unwrap_or_else(|_| {
         error!("Cannot parse url: {}", args.url);
@@ -251,12 +279,14 @@ fn main() {
     });
 
     debug!("Crawling...");
-    crawl(&document, &mut found_urls, &args);
+    crawl(&document, found_urls.clone(), Arc::new(args));
+
+    let found_urls = found_urls.lock().unwrap();
 
     let mut internal_urls = Vec::new();
     let mut external_urls = Vec::new();
 
-    for url in found_urls {
+    for url in found_urls.iter() {
         if url.domain() == document.domain() {
             internal_urls.push(url);
         } else {
