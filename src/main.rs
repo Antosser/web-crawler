@@ -71,8 +71,8 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
     };
     let is_html = match response.headers().get("content-type") {
         Some(content_type) => match content_type.to_str() {
-            Ok(content_type_string) => match content_type_string.split(";").nth(0) {
-                Some(x) => x.to_string() == "text/html",
+            Ok(content_type_string) => match content_type_string.split(';').next() {
+                Some(x) => x == "text/html",
                 None => {
                     warn!("Cannot get content-type: {}", url);
                     false
@@ -127,9 +127,9 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
             };
 
             {
-                let mut relative_path = url.path().strip_prefix("/").unwrap_or(url.path());
-                relative_path = relative_path.strip_suffix("/").unwrap_or(relative_path);
-                relative_path = relative_path.strip_suffix("\\").unwrap_or(relative_path);
+                let mut relative_path = url.path().strip_prefix('/').unwrap_or(url.path());
+                relative_path = relative_path.strip_suffix('/').unwrap_or(relative_path);
+                relative_path = relative_path.strip_suffix('\\').unwrap_or(relative_path);
                 trace!("Working directory: {}", path_string);
                 path.push(relative_path);
             }
@@ -169,8 +169,8 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
 
             {
                 let mut file_path = path_string;
-                file_path = file_path.strip_suffix("/").unwrap_or(file_path);
-                file_path = file_path.strip_suffix("\\").unwrap_or(file_path);
+                file_path = file_path.strip_suffix('/').unwrap_or(file_path);
+                file_path = file_path.strip_suffix('\\').unwrap_or(file_path);
 
                 if Path::new(file_path).exists() {
                     warn!("File already exists: {}", file_path);
@@ -231,7 +231,7 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
         };
         trace!("Found link: {}", value.as_utf8_str().to_string());
 
-        let url = match url.join(&value.as_utf8_str().to_string()) {
+        let url = match url.join(&value.as_utf8_str()) {
             Ok(x) => x,
             Err(e) => {
                 warn!("Cannot join url: {}", e);
@@ -249,23 +249,21 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
         let mut urls_locked = urls.lock().unwrap();
 
         for mut i in found {
-            i = Url::parse(i.to_string().split('?').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
-            i = Url::parse(i.to_string().split('#').nth(0).unwrap_or(&i.to_string())).unwrap(); // Unreachable .unwrap()
+            i = Url::parse(i.to_string().split('?').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
+            i = Url::parse(i.to_string().split('#').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
 
-            if !urls_locked.iter().any(|x| x.as_str() == i.as_str()) {
-                if !args.exclude.iter().any(|j| i.path().starts_with(j)) {
-                    info!("Found url: {}", i);
-                    urls_locked.push(i.clone());
-                    if url.domain() == i.domain() || args.crawl_external {
-                        trace!("Url is internal. Crawling: {}", i.to_string());
-                        {
-                            let urls = urls.clone();
-                            let args = args.clone();
+            if !urls_locked.iter().any(|x| x.as_str() == i.as_str()) && !args.exclude.iter().any(|j| i.path().starts_with(j)) {
+                info!("Found url: {}", i);
+                urls_locked.push(i.clone());
+                if url.domain() == i.domain() || args.crawl_external {
+                    trace!("Url is internal. Crawling: {}", i.to_string());
+                    {
+                        let urls = urls.clone();
+                        let args = args.clone();
 
-                            threads.push(thread::spawn(move || {
-                                crawl(&i, urls, args);
-                            }));
-                        }
+                        threads.push(thread::spawn(move || {
+                            crawl(&i, urls, args);
+                        }));
                     }
                 }
             }
@@ -308,19 +306,19 @@ fn main() {
         }
     }
 
-    println!("{}", format!("Internal urls:").bright_green());
+    println!("{}", "Internal urls:".to_string().bright_green());
     for url in &internal_urls {
         println!("{}", url.as_str());
     }
 
-    println!("{}", format!("External urls:").red());
+    println!("{}", "External urls:".to_string().red());
     for url in &external_urls {
         println!("{}", url.as_str());
     }
 
     fn export<T: Borrow<Url>>(file_name: &str, found_urls: &[T]) {
         'export: {
-            let mut file = match fs::File::create(&file_name) {
+            let mut file = match fs::File::create(file_name) {
                 Ok(x) => x,
                 Err(e) => {
                     error!("Cannot create file: {}: {}", file_name, e);
