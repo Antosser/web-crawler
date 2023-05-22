@@ -5,7 +5,7 @@ Finds every page, image, and script on a website (and downloads it)
 ```
 Rust Web Crawler
 
-Usage: web-crawler.exe [OPTIONS] <URL>
+Usage: web-crawler [OPTIONS] <URL>
 
 Arguments:
   <URL>
@@ -25,6 +25,8 @@ Options:
           Where to export internal URLs
       --export-external <EXPORT_EXTERNAL>
           Where to export external URLs
+  -t, --timeout <TIMEOUT>
+          Timeout between requests in milliseconds [default: 100]
   -h, --help
           Print help
   -V, --version
