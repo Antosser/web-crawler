@@ -77,9 +77,11 @@ fn crawl(
         let mut latest_request = latest_request.lock().unwrap();
         let time_since_last_request = latest_request.elapsed();
         if time_since_last_request < time::Duration::from_millis(args.timeout) {
-            thread::sleep(time::Duration::from_millis(
-                args.timeout - time_since_last_request.as_millis() as u64,
-            ));
+            thread::sleep(time::Duration::from_millis({
+                let time = args.timeout - time_since_last_request.as_millis() as u64;
+                debug!("Sleeping for {}ms", time);
+                time
+            }));
         }
 
         *latest_request = time::Instant::now();
