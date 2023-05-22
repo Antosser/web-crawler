@@ -298,7 +298,7 @@ fn crawl(
 }
 
 fn main() {
-    env_logger::init();
+    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
     debug!("Parsing arguments...");
     let args = Args::parse();
