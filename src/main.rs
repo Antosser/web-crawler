@@ -1,6 +1,7 @@
 use clap::Parser;
 use colored::Colorize;
 use log::{debug, error, info, trace, warn};
+use std::time;
 use std::{
     borrow::Borrow,
     fs,
@@ -47,9 +48,18 @@ struct Args {
     /// Where to export external URLs
     #[arg(long)]
     export_external: Option<String>,
+
+    /// Timeout between requests in milliseconds
+    #[arg(short, long, default_value_t = 100)]
+    timeout: u64,
 }
 
-fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
+fn crawl(
+    url: &Url,
+    urls: Arc<Mutex<Vec<Url>>>,
+    args: Arc<Args>,
+    latest_request: Arc<Mutex<time::Instant>>,
+) {
     {
         let mut urls = urls.lock().unwrap();
 
@@ -61,6 +71,18 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
         }
     }
 
+    // Wait for timeout
+    {
+        let mut latest_request = latest_request.lock().unwrap();
+        let time_since_last_request = latest_request.elapsed();
+        if time_since_last_request < time::Duration::from_millis(args.timeout) {
+            thread::sleep(time::Duration::from_millis(
+                args.timeout - time_since_last_request.as_millis() as u64,
+            ));
+        }
+
+        *latest_request = time::Instant::now();
+    }
     trace!("Fetching url: {}", url.to_string());
     let response = match reqwest::blocking::get(url.as_str()) {
         Ok(x) => x,
@@ -258,9 +280,10 @@ fn crawl(url: &Url, urls: Arc<Mutex<Vec<Url>>>, args: Arc<Args>) {
                     {
                         let urls = urls.clone();
                         let args = args.clone();
+                        let latest_request = latest_request.clone();
 
                         threads.push(thread::spawn(move || {
-                            crawl(&i, urls, args);
+                            crawl(&i, urls, args, latest_request);
                         }));
                     }
                 }
@@ -288,7 +311,12 @@ fn main() {
     });
 
     debug!("Crawling...");
-    crawl(&document, found_urls.clone(), Arc::new(args.clone()));
+    crawl(
+        &document,
+        found_urls.clone(),
+        Arc::new(args.clone()),
+        Arc::new(Mutex::new(time::Instant::now())),
+    );
 
     let mut found_urls = found_urls.lock().unwrap();
     found_urls.sort();
