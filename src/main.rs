@@ -67,6 +67,7 @@ fn crawl(
             urls.push(url.clone());
         }
         if url.to_string().len() > args.max_url_length as usize {
+            warn!("URL too long: {}", url);
             return;
         }
     }
