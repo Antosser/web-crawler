@@ -91,7 +91,7 @@ fn crawl(
         Ok(x) => x,
         Err(e) => {
             error!("Cannot request file: {}", e);
-            exit(1);
+            return;
         }
     };
     let is_html = match response.headers().get("content-type") {
@@ -198,16 +198,19 @@ fn crawl(
                     break 'download;
                 }
                 trace!("Writing to file: {}", file_path);
-                let mut f = fs::File::create(file_path).unwrap_or_else(|e| {
-                    error!("Cannot create file: {}: {}", file_path, e);
-                    exit(1);
-                });
+                let mut f = match fs::File::create(file_path) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("Cannot create file: {}: {}", file_path, e);
+                        return;
+                    }
+                };
 
                 match f.write_all(&response_bytes) {
                     Ok(_) => {}
                     Err(e) => {
                         error!("Cannot write to file: {}: {}", file_path, e);
-                        exit(1);
+                        return;
                     }
                 };
             }
