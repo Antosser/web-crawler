@@ -3,6 +3,10 @@ author = "Anton Aparin"
 name = "web-crawler"
 version = "0.1.2"
 edition = "2021"
+description = "Finds every page, image, and script on a website (and downloads it)"
+license = "Attribution-NonCommercial 4.0 International"
+repository = "https://github.com/Antosser/web-crawler"
+documentation = "https://github.com/Antosser/web-crawler#readme"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
