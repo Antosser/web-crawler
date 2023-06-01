@@ -57,7 +57,7 @@ struct Args {
 fn crawl(
     url: &Url,
     urls: Arc<Mutex<Vec<Url>>>,
-    args: Arc<Args>,
+    args: &Args,
     latest_request: Arc<Mutex<time::Instant>>,
 ) {
     {
@@ -267,9 +267,7 @@ fn crawl(
         found.push(url);
     }
 
-    let mut threads = vec![];
-
-    {
+    thread::scope(|s| {
         let mut urls_locked = urls.lock().unwrap();
 
         for mut i in found {
@@ -285,21 +283,16 @@ fn crawl(
                     trace!("Url is internal. Crawling: {}", i.to_string());
                     {
                         let urls = urls.clone();
-                        let args = args.clone();
                         let latest_request = latest_request.clone();
 
-                        threads.push(thread::spawn(move || {
+                        s.spawn(move || {
                             crawl(&i, urls, args, latest_request);
-                        }));
+                        });
                     }
                 }
             }
         }
-    }
-
-    for thread in threads {
-        thread.join().unwrap();
-    }
+    });
 }
 
 fn main() {
@@ -320,7 +313,7 @@ fn main() {
     crawl(
         &document,
         found_urls.clone(),
-        Arc::new(args.clone()),
+        &args,
         Arc::new(Mutex::new(time::Instant::now())),
     );
 
