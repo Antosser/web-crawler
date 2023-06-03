@@ -100,20 +100,11 @@ fn is_html(headers: &HeaderMap) -> Result<bool, String> {
         Some(content_type) => match content_type.to_str() {
             Ok(content_type_string) => match content_type_string.split(';').next() {
                 Some(x) => Ok(x == "text/html"),
-                None => {
-                    warn!("Cannot get content-type");
-                    Err("Cannot get content-type".to_string())
-                }
+                None => Err("Cannot get content-type".to_string()),
             },
-            Err(_) => {
-                warn!("Cannot get content-type");
-                Err("Cannot get content-type".to_string())
-            }
+            Err(_) => Err("Cannot get content-type".to_string()),
         },
-        None => {
-            warn!("Response header doesn't have content-type");
-            Err("Response header doesn't have content-type".to_string())
-        }
+        None => Err("Response header doesn't have content-type".to_string()),
     }
 }
 
@@ -122,8 +113,7 @@ fn save_document(url: &Url, is_html: bool, content: &[u8]) -> Result<(), String>
     let mut path = match std::env::current_dir() {
         Ok(x) => x,
         Err(e) => {
-            error!("Cannot get current working directory: {}", e);
-            exit(1);
+            return Err(format!("Cannot get current directory: {}", e));
         }
     };
     path.push(match url.host_str() {
@@ -165,7 +155,6 @@ fn save_document(url: &Url, is_html: bool, content: &[u8]) -> Result<(), String>
     let path_without_last_dir_string = match path_without_last_dir.to_str() {
         Some(x) => x,
         None => {
-            warn!("Couldn't stringify path");
             return Err("Couldn't stringify path".to_string());
         }
     };
