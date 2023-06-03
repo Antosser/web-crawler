@@ -99,20 +99,20 @@ fn is_html(headers: &HeaderMap) -> Result<bool, String> {
     match headers.get("content-type") {
         Some(content_type) => match content_type.to_str() {
             Ok(content_type_string) => match content_type_string.split(';').next() {
-                Some(x) => return Ok(x == "text/html"),
+                Some(x) => Ok(x == "text/html"),
                 None => {
                     warn!("Cannot get content-type");
-                    return Err("Cannot get content-type".to_string());
+                    Err("Cannot get content-type".to_string())
                 }
             },
             Err(_) => {
                 warn!("Cannot get content-type");
-                return Err("Cannot get content-type".to_string());
+                Err("Cannot get content-type".to_string())
             }
         },
         None => {
             warn!("Response header doesn't have content-type");
-            return Err("Response header doesn't have content-type".to_string());
+            Err("Response header doesn't have content-type".to_string())
         }
     }
 }
