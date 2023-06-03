@@ -100,9 +100,9 @@ fn is_html(headers: &HeaderMap) -> Result<bool, String> {
         Some(content_type) => match content_type.to_str() {
             Ok(content_type_string) => match content_type_string.split(';').next() {
                 Some(x) => Ok(x == "text/html"),
-                None => Err("Cannot get content-type".to_string()),
+                None => Err("content-type header is empty".to_string()),
             },
-            Err(_) => Err("Cannot get content-type".to_string()),
+            Err(_) => Err("Cannot stringify content-type header".to_string()),
         },
         None => Err("Response header doesn't have content-type".to_string()),
     }
