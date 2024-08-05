@@ -75,14 +75,12 @@ fn get_urls_from_document(doc: &str) -> Result<Vec<String>, String> {
             }
         };
 
-        let value = match {
-            match tag.attributes().get("href") {
+        let value = match match tag.attributes().get("href") {
+            Some(x) => x,
+            None => match tag.attributes().get("src") {
                 Some(x) => x,
-                None => match tag.attributes().get("src") {
-                    Some(x) => x,
-                    None => continue,
-                },
-            }
+                None => continue,
+            },
         } {
             Some(x) => x,
             None => continue,
@@ -279,8 +277,8 @@ fn crawl(
         let mut urls_locked = urls.lock().unwrap();
 
         for mut i in found {
-            i = Url::parse(i.to_string().split('?').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
-            i = Url::parse(i.to_string().split('#').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
+            i = Url::parse(i.as_ref().split('?').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
+            i = Url::parse(i.as_ref().split('#').next().unwrap_or(i.as_ref())).unwrap(); // Unreachable .unwrap()
 
             if !urls_locked.iter().any(|x| x.as_str() == i.as_str())
                 && !args.exclude.iter().any(|j| i.path().starts_with(j))
