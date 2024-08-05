@@ -1,7 +1,9 @@
 # Web Crawler
+
 Finds every page, image, and script on a website (and downloads it)
 
 ## Usage
+
 ```
 Rust Web Crawler
 
@@ -34,6 +36,12 @@ Options:
 ```
 
 ## How to compile yourself
-1. Download rust
+
+1. Download Rust
 2. Type `cargo build -r`
 3. Executable is in `target/release`
+
+**or**
+
+1. Download Rust
+2. Install using `cargo install web-crawler`
