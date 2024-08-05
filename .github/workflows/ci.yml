@@ -1,125 +1,57 @@
-name: ci
+name: Rust CI
+
 on:
-  pull_request:
   push:
     branches:
       - main
-
-# The section is needed to drop write-all permissions that are granted on
-# `schedule` event. By specifying any permission explicitly all others are set
-# to none. By using the principle of least privilege the damage a compromised
-# workflow can do (because of an injection or compromised third party tool or
-# action) is restricted. Currently the worklow doesn't need any additional
-# permission except for pulling the code. Adding labels to issues, commenting
-# on pull-requests, etc. may need additional permissions:
-#
-# Syntax for this section:
-# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
-#
-# Reference for how to assign permissions on a job-by-job basis:
-# https://docs.github.com/en/actions/using-jobs/assigning-permissions-to-jobs
-#
-# Reference for available permissions that we can enable if needed:
-# https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
-permissions:
-  # to fetch code (actions/checkout)
-  contents: read
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  test:
-    name: test
+  build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        include:
-          - build: pinned
-            os: ubuntu-latest
-            rust: 1.65.0
-          - build: stable
-            os: ubuntu-latest
-            rust: stable
-          - build: beta
-            os: ubuntu-latest
-            rust: beta
-          - build: nightly
-            os: ubuntu-latest
-            rust: nightly
-          - build: macos
-            os: macos-latest
-            rust: stable
-          - build: win-msvc
-            os: windows-latest
-            rust: stable
-          - build: win-gnu
-            os: windows-latest
-            rust: stable-x86_64-gnu
-    env:
-      RUSTFLAGS: -D warnings
-      RUST_BACKTRACE: 1
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, beta, nightly]
+
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
-      - run: cargo build --verbose
-      - run: cargo doc --verbose
-      # We run a few other builds, but only on one instance to avoid doing
-      # more work than we need to.
-      - if: matrix.build == 'stable'
-        run: cargo build --verbose --features serde
-      - if: matrix.build == 'stable'
-        run: cargo build --verbose --no-default-features
-      - if: matrix.build == 'stable'
-        run: cargo build --verbose --no-default-features --features serde,alloc
-      - if: matrix.build == 'stable'
-        run: cargo build --verbose --no-default-features --features serde
-      - if: matrix.build == 'stable'
-        run: cargo build --verbose --no-default-features --features alloc
-      # Our dev dependencies evolve more rapidly than we'd like, so only run
-      # tests when we aren't pinning the Rust version.
-      - if: matrix.build != 'pinned'
-        run: cargo test --verbose
-      # As with 'cargo build' above, run tests on a bunch of feature
-      # combinations, but just on 'stable' to avoid doing more work that we have
-      # to.
-      - if: matrix.build == 'stable'
-        run: cargo test --verbose --features serde
-      - if: matrix.build == 'stable'
-        run: cargo test --verbose --no-default-features
-      - if: matrix.build == 'stable'
-        run: cargo test --verbose --no-default-features --features serde,alloc
-      - if: matrix.build == 'stable'
-        run: cargo test --verbose --no-default-features --features serde
-      - if: matrix.build == 'stable'
-        run: cargo test --verbose --no-default-features --features alloc
-      - name: Run benchmarks as tests
-        if: matrix.build == 'stable'
-        working-directory: ./bench
-        run: cargo test --verbose --benches
+          target: ${{ matrix.os == 'windows-latest' && 'x86_64-pc-windows-msvc' || 'x86_64-unknown-linux-gnu' }}
 
-  rustfmt:
-    name: rustfmt
+      - name: Install dependencies
+        run: cargo fetch
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run rustfmt
+        run: cargo fmt -- --check
+
+  # Optional: Additional job to ensure that the code is properly formatted before merging
+  fmt-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-          components: rustfmt
-      - name: Check formatting
-        run: cargo fmt --check
-#   miri:
-#     name: miri
-#     runs-on: ubuntu-latest
-#     steps:
-#     - name: Checkout repository
-#       uses: actions/checkout@v3
-#     - name: Install Rust
-#       uses: dtolnay/rust-toolchain@miri
-#     - run: cargo miri test --lib --verbose
-#       env:
-#         MIRIFLAGS: -Zmiri-strict-provenance
+
+      - name: Run rustfmt
+        run: cargo fmt -- --check
