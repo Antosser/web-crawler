@@ -1,7 +1,7 @@
 [package]
-author = "Anton Aparin"
+authors = ["Anton Aparin"]
 name = "web-crawler"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Finds every page, image, and script on a website (and downloads it)"
 license = "MIT" # Doesn't really matter
